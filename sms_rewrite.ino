@@ -1,32 +1,34 @@
+#define smsPowerDelay 5000
+
 const int smsPowerPin = 22;
 
-void smsPowerOn() {
-  digitalWrite(smsPowerPin, HIGH);
-  delay(500);
-  digitalWrite(smsPowerPin, LOW);
+void smsPower(bool powerState) {
+  // Power on GPRS and set proper modes for operation
+  if (powerState == true) {
+    digitalWrite(smsPowerPin, HIGH);
+    delay(500);
+    digitalWrite(smsPowerPin, LOW);
 
-  delay(5000);
+    delay(smsPowerDelay);
 
-  Serial1.println("ATE0");
-  delay(100);
-  Serial1.println("ATQ1");
-  delay(100);
-  Serial1.println("ATV0");
-  delay(100);
-  Serial1.println("AT+CMGF=1");
-  delay(100);
-  Serial1.println("AT+CNMI=2,2,0,0,0");
-  delay(100);
-  Serial1.println("AT+CMGR=\"REC UNREAD\"");
-  delay(100);
+    Serial1.println("ATE0");
+    delay(100);
+    Serial1.println("ATQ1");
+    delay(100);
+    Serial1.println("ATV0");
+    delay(100);
+    Serial1.println("AT+CMGF=1");
+    delay(100);
+    Serial1.println("AT+CNMI=2,2,0,0,0");
+    delay(100);
+  }
 
-  smsFlush();
-}
-
-void smsPowerOff() {
-  digitalWrite(smsPowerPin, HIGH);
-  delay(1000);
-  digitalWrite(smsPowerPin, LOW);
+  // Power off GPRS
+  else {
+    digitalWrite(smsPowerPin, HIGH);
+    delay(1000);
+    digitalWrite(smsPowerPin, LOW);
+  }
 }
 
 void setup() {
@@ -35,23 +37,39 @@ void setup() {
   Serial.begin(9600);
   Serial1.begin(19200);
 
-  smsPower();
+  smsPower(true);
 
-  delay(5000);
+  smsFlush();
 }
 
 void loop() {
   if (Serial.available()) {
-    Serial1.write(Serial.read());
-    delay(10);
+    while (Serial.available()) {
+      Serial1.write(Serial.read());
+      delay(10);
+    }
+    delay(100);
+    if (Serial1.available()) {
+      while (Serial1.available()) {
+        Serial.write(Serial1.read());
+        delay(10);
+      }
+    }
   }
   if (Serial1.available()) {
-    Serial.write(Serial1.read());
-    delay(10);
+    String smsMessageRaw = "";
+    while (Serial1.available()) {
+      char c = Serial1.read();
+      smsMessageRaw += c;
+      delay(10);
+    }
+    Serial.print("smsMessageRaw: ");
+    Serial.println(smsMessageRaw);
+    smsHandler(smsMessageRaw, true);
   }
 }
 
-void smsHandler(bool execCommand) {
+void smsHandler(String smsMessageRaw, bool execCommand) {
   String smsRecNumber = "";
   String smsMessage = "";
 
@@ -60,7 +78,7 @@ void smsHandler(bool execCommand) {
   Serial.println(numIndex);
 
   int smsIndex = smsMessageRaw.lastIndexOf('"') + 3;
-  Serial.print(F("smsIndex: "));
+  Serial.print("smsIndex: ");
   Serial.println(smsIndex);
 
   for (numIndex; ; numIndex++) {
@@ -68,11 +86,16 @@ void smsHandler(bool execCommand) {
     if (c == '"') break;
     smsRecNumber += c;
   }
+  Serial.print("smsRecNumber: ");
+  Serial.println(smsRecNumber);
+
   for (smsIndex; ; smsIndex++) {
     char c = smsMessageRaw.charAt(smsIndex);
     if (c == '\n' || c == '\r') break;
     smsMessage += c;
   }
+  Serial.print("smsMessage: ");
+  Serial.println(smsMessage);
 
   if (execCommand == true) {
     int smsCommand = 0;
@@ -83,25 +106,15 @@ void smsHandler(bool execCommand) {
     // Some sort of "if data available, then proceed to switch case"
     switch (smsCommand) {
       case 1:
-        Serial.println("LED activated!");
-        // Retrieve updated GPS coordinates and send via SMS
-        digitalWrite(smsLED, HIGH);
-        delay(1000);
-        digitalWrite(smsLED, LOW);
+        Serial.println("Command #1");
         break;
       case 2:
         // Activate buzzer
-        Serial.println(F("Piezo buzzer activated!"));
-        digitalWrite(piezoPin, HIGH);
-        delay(50);
-        digitalWrite(piezoPin, LOW);
+        Serial.println("Command #2");
         break;
       case 3:
         // Trigger smoke signal
-        Serial.println(F("Smoke signal activated!"));
-        digitalWrite(smokePin, HIGH);
-        delay(2000);
-        digitalWrite(smokePin, LOW);
+        Serial.println("Command #3");
         break;
       default:
         Serial.print("INVALID COMMAND: ");
@@ -117,4 +130,3 @@ void smsFlush() {
     delay(10);
   }
 }
-
